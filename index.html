@@ -1,0 +1,945 @@
+<!DOCTYPE html>
+<html lang="en">
+<head> 
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>AI Assistant</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@100;500;800;900&display=swap" rel="stylesheet">
+<!-- Load Transformers.js -->
+<script src="https://cdn.jsdelivr.net/npm/@xenova/transformers@2.6.0"></script>
+<!-- Load Lucide Icons -->
+<script src="https://unpkg.com/lucide@latest"></script>
+<!-- Load QRCode.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+<style>
+    /* BASIC RESET & FONTS */
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        font-family: 'Montserrat', sans-serif;
+    }
+    body {
+        background-color: transparent; /* Allows embedding on other pages easily */
+    }
+
+    /* CHAT CONTAINER STYLES */
+    .chat-container {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        width: 500px;
+        height: 500px;
+        background-color: #fff;
+        border-radius: 10px;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+        display: none; /* Hidden by default */
+        flex-direction: column;
+        z-index: 1001;
+        transition: all 0.3s ease;
+    }
+
+    /* HEADER */
+    .chat-header {
+        font-weight: 600;
+        background-color: #202123;
+        color: #fff;
+        padding: 15px;
+        border-top-left-radius: 10px;
+        border-top-right-radius: 10px;
+        text-align: center;
+        font-size: 18px;
+        position: relative;
+    }
+    .close-chat-button {
+        position: absolute;
+        top: 5px;
+        right: 5px;
+        background: none;
+        border: none;
+        color: white;
+        font-size: 30px;
+        cursor: pointer;
+        padding: 0 10px;
+        line-height: 1;
+    }
+    .close-chat-button:hover {
+        color: #ccc;
+    }
+
+    /* HISTORY & MESSAGES */
+    .chat-history {
+        flex: 1;
+        padding: 20px;
+        overflow-y: auto;
+        border-bottom: 1px solid #e5e5e5;
+    }
+    .message {
+        margin-bottom: 15px;
+        display: flex;
+        flex-direction: column;
+    }
+    .message.user {
+        align-items: flex-end;
+    }
+    .message.bot {
+        align-items: flex-start;
+    }
+    .message-text {
+        max-width: 70%;
+        padding: 10px 15px;
+        border-radius: 10px;
+        word-wrap: break-word;
+        font-size: 14px;
+        position: relative;
+    }
+    .message.user .message-text {
+        background-color: #007bff;
+        color: #fff;
+    }
+    .message.bot .message-text {
+        background-color: #e5e5e5;
+        color: #000;
+    }
+    
+    /* Link Styling in Bot Messages */
+    .message.bot .message-text a {
+        color: #0056b3;
+        text-decoration: underline;
+        font-weight: 500;
+        transition: all 0.2s ease;
+    }
+    .message.bot .message-text a:hover {
+        color: #003d82;
+    }
+    
+    /* Active Link Highlight (when QR is shown) */
+    .message.bot .message-text a.qr-highlight {
+        background-color: rgba(0, 0, 0, 0.1);
+        color: #000;
+        font-weight: 800;
+        text-decoration: none;
+        padding: 0 4px;
+        border-radius: 4px;
+        border: 1px solid #999;
+    }
+
+    /* QR CONTAINER STYLES */
+    .qr-wrapper {
+        margin-top: 10px;
+        padding: 10px;
+        background: #f8f9fa;
+        border-radius: 8px;
+        border: 1px solid #eee;
+        display: none; /* Hidden by default */
+        flex-direction: column;
+        align-items: center;
+        width: 100%;
+        max-width: 200px;
+        align-self: flex-start;
+    }
+    .qr-display {
+        background: white;
+        padding: 5px;
+        border-radius: 4px;
+    }
+    .qr-controls {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 15px;
+        margin-top: 8px;
+        width: 100%;
+    }
+    .qr-nav-btn {
+        background: none;
+        border: 1px solid #ddd;
+        border-radius: 50%;
+        width: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        color: #555;
+    }
+    .qr-nav-btn:hover:not(:disabled) {
+        background-color: #e2e2e2;
+        color: #000;
+    }
+    .qr-nav-btn:disabled {
+        opacity: 0.3;
+        cursor: default;
+    }
+    .qr-counter {
+        font-size: 10px;
+        color: #888;
+        font-weight: 500;
+    }
+
+    /* ACTIONS CONTAINER (Copy + QR buttons) */
+    .message-actions {
+        margin-top: 6px;
+        margin-left: 2px;
+        opacity: 0; /* Hidden initially, fades in via JS */
+        transition: opacity 0.3s ease;
+        display: flex; 
+        gap: 10px; /* Space between buttons */
+    }
+
+    /* COMMON BUTTON STYLES */
+    .action-button {
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        padding: 4px 8px;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        transition: background-color 0.2s ease;
+    }
+    .action-button:hover {
+        background-color: #f0f0f0;
+    }
+    .action-button .lucide {
+        width: 14px;
+        height: 14px;
+        color: #888;
+        transition: color 0.2s ease;
+    }
+    .action-text {
+        font-size: 11px;
+        color: #ccc;
+        font-weight: 500;
+        user-select: none;
+        transition: color 0.2s ease;
+    }
+    .action-button:hover .action-text {
+        color: #888;
+    }
+    .action-button:hover .lucide {
+        color: #333;
+    }
+
+    /* REDIRECT BUTTONS (YES/NO) */
+    .redirect-container {
+        margin-top: 10px;
+        margin-left: 2px;
+        display: flex;
+        gap: 10px;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+    }
+    .redirect-btn {
+        padding: 6px 16px;
+        border-radius: 5px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        border: none;
+        transition: transform 0.1s ease, background-color 0.2s ease;
+    }
+    .redirect-btn:active {
+        transform: scale(0.95);
+    }
+    .yes-btn {
+        background-color: #007bff;
+        color: white;
+    }
+    .yes-btn:hover {
+        background-color: #0069d9;
+    }
+    .no-btn {
+        background-color: #e5e5e5;
+        color: #333;
+    }
+    .no-btn:hover {
+        background-color: #d6d6d6;
+    }
+
+    /* INPUT AREA */
+    .chat-input-container {
+        display: flex;
+        padding: 15px;
+        gap: 8px;
+        border-top: 1px solid #e5e5e5;
+    }
+    .chat-input {
+        flex: 1;
+        padding: 10px;
+        font-size: 14px;
+        border: 1px solid #e5e5e5;
+        border-radius: 5px;
+        outline: none;
+    }
+    .chat-input:focus {
+        border-color: #007bff;
+    }
+    .chat-input::placeholder {
+        opacity: 1;
+        transition: opacity 0.3s ease-in-out;
+    }
+    .chat-input:disabled::placeholder {
+        opacity: 0;
+    }
+    .send-button {
+        padding: 0;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background-color: #007bff;
+        color: #fff;
+        border: none;
+        cursor: pointer;
+        font-size: 16px;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .send-button:disabled {
+        background-color: #ccc;
+        cursor: default;
+    }
+
+    /* TOGGLE BUTTON STYLES */
+    .chat-toggle-button {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        width: 70px;
+        height: 70px;
+        background-color: #007bff;
+        border-radius: 50%;
+        box-shadow: 3px 3px 4px rgba(0, 0, 0, 0.3);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        border: none;
+        cursor: pointer;
+        z-index: 1000;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
+        outline: none;
+        padding: 15px;
+        margin: 0;
+        -webkit-user-select: none;
+        user-select: none;
+        color: white;
+
+        /* INITIAL STATE: Fully Visible */
+        opacity: 1;
+        /* TRANSITION: Standard transitions for transforms/shadows */
+        transition: transform 0.4s ease-in-out, box-shadow 0.4s ease-in-out, opacity 0.4s ease-in-out;
+    }
+
+    /* IDLE STATE: Applied after 10 seconds via JS */
+    .chat-toggle-button.inactive {
+        opacity: 0.25; /* Barely visible */
+        /* TRANSITION: Slow fade out (2s) when entering this state */
+        transition: opacity 2s ease-out, transform 0.4s ease-in-out, box-shadow 0.4s ease-in-out;
+    }
+
+    /* HOVER STATE: High attention */
+    .chat-toggle-button:hover {
+        width: 65px;
+        height: 65px;
+        box-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+        
+        /* Force full visibility on hover */
+        opacity: 1;
+        
+        /* TRANSITION: Fast fade in (0.3s) when hovering */
+        transition: opacity 0.3s ease-in-out, width 0.4s ease-in-out, height 0.4s ease-in-out;
+    }
+
+    .chat-toggle-button::after {
+        content: '';
+        position: absolute;
+        top: -15px;
+        left: -15px;
+        right: -15px;
+        bottom: -15px;
+    }
+
+    /* Style for Lucide Icon inside button */
+    .chat-toggle-button .lucide {
+        width: 36px;
+        height: 36px;
+        stroke: currentColor;
+    }
+
+    /* LOADER */
+    .loader {
+        display: none; /* Controlled by JS */
+    }
+
+    /* RESPONSIVE STYLES */
+    @media (max-aspect-ratio: 1/1), (max-width: 638px) {
+        .chat-container {
+            width: calc(100% - 20px); 
+            height: 80vh; 
+            right: 10px; 
+            left: 10px; 
+            bottom: 20px; 
+            margin: 0 auto; 
+            box-sizing: border-box;
+        }
+        .chat-toggle-button {
+            left: calc(100% - 60px - 20px); 
+            width: 60px; 
+            height: 60px; 
+            bottom: 20px;
+        }
+    }
+</style>
+</head>
+<body>
+
+    <!-- CHAT INTERFACE -->
+    <div class="chat-container">
+        <div class="chat-header">
+            АІ - чат
+            <button class="close-chat-button">×</button>
+        </div>
+        <div class="chat-history" id="chatHistory">
+            <div class="message bot">
+                <div class="message-text">Є питання, а шукати не готові? 🔍<br>Можете запитати мене, ШІ! 🧠<br><br><b>Звертаю Вашу увагу:</b><br>Один запит - одне питання 📌<br>Інколи я можу помилятися 🧩<br><br>Але я буду радий допомогти!</div>
+            </div>
+        </div>
+        <div class="chat-input-container">
+            <!-- Disabled by default, enabled via JS when AI loads -->
+            <input type="text" class="chat-input" id="inputText" placeholder="Напишіть Ваш запит..." disabled>
+            <button class="send-button" onclick="sendMessage()" disabled>➤</button>
+        </div>
+    </div>
+
+    <!-- TOGGLE BUTTON -->
+    <button class="chat-toggle-button">
+        <!-- Changed to simple 'bot' icon -->
+        <i data-lucide="bot"></i>
+    </button>
+
+<script>
+// AI CHAT VARIABLES
+let isProcessing=false, pipe=null, embeddingsLoading=false, answers=[], urlContexts=[], animationInterval=null;
+
+// INIT ANSWERS, CONTEXTS & UI
+document.addEventListener('DOMContentLoaded',()=>{
+    // Initialize Lucide Icons
+    lucide.createIcons();
+
+    // Fade out button after 10 seconds
+    setTimeout(() => {
+        const btn = document.querySelector('.chat-toggle-button');
+        if(btn) btn.classList.add('inactive');
+    }, 10000);
+
+    // KNU Science Context Answers (General Knowledge)
+    // Note: No repetitive "You can find URL..." lines here. 
+    answers=[
+        "I'm sorry, I don't know the answer or didn't understand the question",
+        "Перепрошую, я не знаю відповідь або не зрозумів питання",
+        "My work is based on embeddings. With their help, I find the most appropriate answer and address it to you",
+        "В основі моєї роботи лежать ембедінги (embeddings). Із їх допомогою я знаходжу найбільш підходящу відповідь та адресую Вам",
+        "Науково-дослідна частина (НДЧ) координує наукову, науково-технічну та інноваційну діяльність університету (science.knu.ua).",
+        "Проректор з наукової роботи забезпечує організацію діяльності, а Рада молодих вчених підтримує дослідників-початківців.",
+        "Університет активно залучає грантове фінансування, зокрема через програми Horizon Europe, Erasmus+ та Національний фонд досліджень України.",
+        "Пріоритетні напрями досліджень включають фізику високих енергій, нанотехнології, біомедицину, інформаційні технології та екологію.",
+        "Результати досліджень публікуються у фахових виданнях, зокрема у 'Віснику Київського національного університету імені Тараса Шевченка'.",
+        "Підготовка наукових кадрів вищої кваліфікації здійснюється через аспірантуру та докторантуру за широким спектром спеціальностей.",
+        "Контакти НДЧ: м. Київ, вул. Павла Скоропадського, 14, тел: +380 (44) 239-3240, email: ndch@knu.ua."
+    ];
+
+    // URL Context Registry (Context Description -> Target URL)
+    // The AI will use these descriptions to match user intent to a URL.
+    urlContexts = [
+        {
+            url: "https://science.knu.ua/new",
+            // Context: Contacts, new website info, current administration, phones, emails
+            text: "Contacts, new website, actual information, news, administration phones emails, Контакти, новий сайт, актуальна інформація, новини, телефони, пошта, адміністрація"
+        },
+        {
+            url: "https://science.knu.ua/old",
+            // Context: Archive, documents, orders, regulations, history, mirror
+            text: "Old mirrored website, archive, documents, orders, regulations, history, documents from previous years, Старий сайт, архів, документи, накази, розпорядження, минулі роки"
+        },
+        {
+            url: "https://knu.ua",
+            // Context: General university info, faculties, admissions
+            text: "General website of the university, faculties, admissions, general structure, main page, Головний сайт університету, вступ, факультети, структура, КНУ, ректорат"
+        }
+    ];
+});
+
+// INIT EMBEDDINGS (TRANSFORMERS.JS)
+async function initializeEmbeddings(){
+    if (embeddingsLoading || pipe) return;
+    embeddingsLoading=true;
+    
+    const history = document.getElementById('chatHistory');
+    const loadMsg = document.createElement('div');
+    loadMsg.classList.add('message', 'bot');
+    loadMsg.innerHTML = `<div class="message-text" id="ai-status">Ініціалізація ШІ... ⏳</div>`;
+    history.appendChild(loadMsg);
+    history.scrollTop = history.scrollHeight;
+
+    // Track progress of multiple files
+    let progressMap = {};
+
+    try {
+        const {pipeline} = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.6.0');
+        pipe = await pipeline('feature-extraction','Xenova/paraphrase-multilingual-MiniLM-L12-v2',{
+            quantized:true,
+            backend:'cpu',
+            progress_callback: (p) => {
+                if (p.status === 'progress' && p.file) {
+                    progressMap[p.file] = {
+                        loaded: p.loaded || 0,
+                        total: p.total || 0
+                    };
+
+                    let grandLoaded = 0;
+                    let grandTotal = 0;
+                    
+                    for (const file in progressMap) {
+                        grandLoaded += progressMap[file].loaded;
+                        grandTotal += progressMap[file].total;
+                    }
+
+                    const status = document.getElementById('ai-status');
+                    const mb = (val) => (val / (1024 * 1024)).toFixed(1);
+                    if(status) status.innerText = `Завантаження ШІ: ${mb(grandLoaded)} / ${mb(grandTotal)} MB 📥`;
+                }
+            }
+        });
+        
+        const status = document.getElementById('ai-status');
+        if(status) status.innerText = "ШІ готовий до роботи! ✅";
+        embeddingsLoading=false;
+
+        const inputField = document.getElementById('inputText');
+        const sendButton = document.querySelector('.send-button');
+        inputField.disabled = false;
+        sendButton.disabled = false;
+        inputField.focus();
+
+    } catch (e) {
+        console.error(e);
+        const status = document.getElementById('ai-status');
+        if(status) status.innerText = "Помилка завантаження. Спробуйте оновити сторінку. ❌";
+        embeddingsLoading=false;
+    }
+}
+
+// OPEN/CLOSE UI LOGIC
+function openChat(){
+    const chat=document.querySelector('.chat-container'),
+          toggleButton=document.querySelector('.chat-toggle-button');
+    chat.style.display='flex';
+    toggleButton.style.display='none';
+    
+    if(!pipe && !embeddingsLoading) {
+        initializeEmbeddings();
+    }
+}
+
+document.querySelector('.chat-toggle-button').addEventListener('click', openChat);
+
+document.querySelector('.close-chat-button').addEventListener('click',()=>{
+    const chat=document.querySelector('.chat-container'),
+          toggleButton=document.querySelector('.chat-toggle-button');
+    chat.style.display='none';
+    toggleButton.style.display='flex';
+});
+
+document.querySelectorAll(".chat-toggle-button").forEach(t=>{
+    t.style.touchAction="manipulation";
+    t.addEventListener("touchstart",e=>{
+        t.style.transform="scale(0.95)";
+        t.style.opacity="1";
+    },{passive:true});
+    t.addEventListener("touchend",e=>{
+        t.style.transform="scale(1)";
+        t.style.opacity="";
+    },{passive:true});
+});
+
+document.getElementById('inputText').addEventListener('keypress',e=>{if(e.key==='Enter')sendMessage();});
+
+async function getEmbedding(text){
+    const output=await pipe(text,{pooling:'mean',normalize:true});
+    return Array.from(output.data);
+}
+
+function cosineSimilarity(a,b){
+    const dot=a.reduce((sum,val,i)=>sum+val*b[i],0),
+          magA=Math.sqrt(a.reduce((sum,val)=>sum+val*val,0)),
+          magB=Math.sqrt(b.reduce((sum,val)=>sum+val*val,0));
+    return dot/(magA*magB);
+}
+
+function calculatePauseDuration(inputText){
+    return Math.min((inputText.length/15)*1000,3000);
+}
+
+function checkForSevenChars(inputText){
+    const sequenceRegex=/(.)\1{6}/,sequenceMatch=inputText.match(sequenceRegex);
+    if(sequenceMatch) return sequenceMatch[0];
+    if(inputText.length>=7){
+        let bestMatch=null, maxLength=0;
+        for(const answer of answers){
+            let longestMatch='';
+            for(let i=0;i<inputText.length;i++){
+                for(let j=0;j<answer.length;j++){
+                    let k=0;
+                    while(i+k<inputText.length&&j+k<answer.length&&inputText[i+k]===answer[j+k]){
+                        longestMatch+=inputText[i+k];k++;
+                    }
+                    if(longestMatch.length>=7&&longestMatch.length>maxLength){
+                        maxLength=longestMatch.length;bestMatch=answer;
+                    }
+                    longestMatch='';
+                }
+            }
+        }
+        return bestMatch;
+    }
+    return null;
+}
+
+// MAIN LOGIC: Find Best Answer or URL Context
+async function findBestMatch(inputText){
+    // 1. Check for exact match trick
+    const directMatch=checkForSevenChars(inputText);
+    if(directMatch){
+        await new Promise(resolve=>setTimeout(resolve,calculatePauseDuration(inputText)));
+        addBotMessage(directMatch);
+        return;
+    }
+    
+    // UI Loading State
+    const loader=document.createElement('div');
+    loader.className='loader';
+    const loadingMessage=document.createElement('div');
+    loadingMessage.classList.add('message','bot');
+    loadingMessage.innerHTML=`<div class="message-text"></div>`;
+    loadingMessage.querySelector('.message-text').appendChild(loader);
+    document.getElementById('chatHistory').appendChild(loadingMessage);
+    
+    try{
+        const inputEmbedding=await getEmbedding(inputText);
+        
+        // 2. Score General Answers
+        let bestGenScore=-1, bestGenAnswer='';
+        for(const answer of answers){
+            const answerEmbedding=await getEmbedding(answer);
+            const score=cosineSimilarity(inputEmbedding,answerEmbedding);
+            if(score>bestGenScore){
+                bestGenScore=score;
+                bestGenAnswer=answer;
+            }
+        }
+
+        // 3. Score URL Contexts
+        let bestUrlScore=-1, bestUrlEntry=null;
+        for(const ctx of urlContexts){
+            const ctxEmbedding=await getEmbedding(ctx.text);
+            const score=cosineSimilarity(inputEmbedding,ctxEmbedding);
+            if(score>bestUrlScore){
+                bestUrlScore=score;
+                bestUrlEntry=ctx;
+            }
+        }
+
+        // 4. Decide Winner
+        // We give URLs a slight preference check or simply take the absolute max
+        let finalResponse = "";
+        
+        // Thresholds prevent weak matches
+        const GEN_THRESHOLD = 0.25; 
+        const URL_THRESHOLD = 0.35; // slightly higher requirement for URL to avoid aggressive redirects
+
+        if(bestUrlScore > bestGenScore && bestUrlScore > URL_THRESHOLD) {
+            // URL Wins: Generate the Redirect Message dynamically
+            finalResponse = `Ви можете знайти цю інформацію за посиланням: ${bestUrlEntry.url} . Бажаєте, щоб я перенаправив Вас туди?`;
+        } else if (bestGenScore > GEN_THRESHOLD) {
+            // General Answer Wins
+            finalResponse = bestGenAnswer;
+        } else {
+            // Fallback
+            finalResponse = "Перепрошую, я не знаю відповідь або не зрозумів питання";
+        }
+
+        await new Promise(resolve=>setTimeout(resolve,calculatePauseDuration(inputText)));
+        addBotMessage(finalResponse);
+
+    }catch(error){
+        console.error(error);
+        addBotMessage("Помилка!");
+    }finally{
+        loadingMessage.remove();
+    }
+}
+
+function addUserMessage(text){
+    const chatHistory=document.getElementById('chatHistory'),
+          message=document.createElement('div');
+    message.classList.add('message','user');
+    message.innerHTML=`<div class="message-text">${text}</div>`;
+    chatHistory.appendChild(message);
+    chatHistory.scrollTop=chatHistory.scrollHeight;
+}
+
+// Helper to convert text to clickable links
+function linkify(text) {
+    let replacedText = text.replace(/(\b(https?|ftp):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/gim, '<a href="$1" target="_blank">$1</a>');
+    replacedText = replacedText.replace(/(^|[^\/])(www\.[\S]+(\b|$))/gim, '$1<a href="http://$2" target="_blank">$2</a>');
+    replacedText = replacedText.replace(/([\w\.\-]+@([\w\-]+\.)+[\w\-]{2,4})/gim, '<a href="mailto:$1">$1</a>');
+    replacedText = replacedText.replace(/(\+[\d\s\-\(\)]{7,}\d)/g, function(match) {
+        let cleanPhone = match.replace(/[^\d+]/g, '');
+        return '<a href="tel:' + cleanPhone + '">' + match + '</a>';
+    });
+    return replacedText;
+}
+
+function addBotMessage(text){
+    const chatHistory=document.getElementById('chatHistory'),
+          message=document.createElement('div');
+    message.classList.add('message','bot');
+    message.innerHTML=`<div class="message-text"></div>`;
+    chatHistory.appendChild(message);
+    
+    let index=0;
+    const interval=setInterval(()=>{
+        if(index<text.length){
+            message.querySelector('.message-text').textContent+=text[index];
+            index++;
+        }else{
+            clearInterval(interval);
+            
+            // Linkify
+            const messageTextElem = message.querySelector('.message-text');
+            messageTextElem.innerHTML = linkify(messageTextElem.textContent);
+
+            const inputField=document.getElementById('inputText'),
+                  sendButton=document.querySelector('.send-button');
+            inputField.disabled=false;
+            sendButton.disabled=false;
+            isProcessing=false;
+            inputField.placeholder=inputField.getAttribute('data-placeholder');
+            inputField.focus();
+
+            // Detect Links for QR
+            const links = Array.from(messageTextElem.querySelectorAll('a'));
+            
+            // --- QR CONTAINER ---
+            let qrWrapper = null;
+            if (links.length > 0) {
+                qrWrapper = document.createElement('div');
+                qrWrapper.className = 'qr-wrapper';
+                
+                const qrDisplay = document.createElement('div');
+                qrDisplay.className = 'qr-display';
+                qrWrapper.appendChild(qrDisplay);
+
+                const qrControls = document.createElement('div');
+                qrControls.className = 'qr-controls';
+                
+                const prevBtn = document.createElement('button');
+                prevBtn.className = 'qr-nav-btn';
+                prevBtn.innerHTML = '<i data-lucide="chevron-left" style="width:14px;height:14px;"></i>';
+                
+                const counter = document.createElement('span');
+                counter.className = 'qr-counter';
+                counter.innerText = `1 / ${links.length}`;
+                
+                const nextBtn = document.createElement('button');
+                nextBtn.className = 'qr-nav-btn';
+                nextBtn.innerHTML = '<i data-lucide="chevron-right" style="width:14px;height:14px;"></i>';
+
+                if (links.length > 1) {
+                    qrControls.appendChild(prevBtn);
+                    qrControls.appendChild(counter);
+                    qrControls.appendChild(nextBtn);
+                    qrWrapper.appendChild(qrControls);
+                }
+
+                message.appendChild(qrWrapper);
+                lucide.createIcons({ root: qrWrapper });
+            }
+
+            // --- ACTIONS CONTAINER (Copy + QR) ---
+            const actionContainer = document.createElement('div');
+            actionContainer.className = 'message-actions';
+            
+            // 1. COPY
+            const copyBtn = document.createElement('button');
+            copyBtn.className = 'action-button';
+            copyBtn.title = "Копіювати"; 
+            copyBtn.innerHTML = `<i data-lucide="copy"></i><span class="action-text">Копіювати</span>`;
+            actionContainer.appendChild(copyBtn);
+
+            // 2. QR BUTTON
+            let qrBtn = null;
+            let currentQrIndex = 0;
+            if (links.length > 0) {
+                qrBtn = document.createElement('button');
+                qrBtn.className = 'action-button';
+                qrBtn.title = "Показати QR";
+                qrBtn.innerHTML = `<i data-lucide="qr-code"></i><span class="action-text">QR-код</span>`;
+                actionContainer.appendChild(qrBtn);
+            }
+
+            message.appendChild(actionContainer);
+            lucide.createIcons({ root: actionContainer });
+
+            // Fade in actions
+            setTimeout(() => actionContainer.style.opacity = '1', 100);
+
+            // Copy Logic
+            copyBtn.addEventListener('click', () => {
+                const disclaimerText = "\n\n*Зверніть увагу: ШІ може помилятися, інформація потребує перевірки людиною.*";
+                const textToCopy = text + disclaimerText;
+
+                navigator.clipboard.writeText(textToCopy).then(() => {
+                    copyBtn.innerHTML = `<i data-lucide="check"></i><span class="action-text" style="color: #4caf50;">Скопійовано</span>`;
+                    lucide.createIcons({ root: copyBtn });
+                    setTimeout(() => {
+                        copyBtn.innerHTML = `<i data-lucide="copy"></i><span class="action-text">Копіювати</span>`;
+                        lucide.createIcons({ root: copyBtn });
+                    }, 2000);
+                }).catch(err => {
+                    console.error('Failed to copy: ', err);
+                });
+            });
+
+            // QR Logic
+            if (qrBtn && qrWrapper) {
+                const qrDisplayDiv = qrWrapper.querySelector('.qr-display');
+                const prevBtn = qrWrapper.querySelector('.qr-nav-btn:first-child');
+                const nextBtn = qrWrapper.querySelector('.qr-nav-btn:last-child');
+                const counterText = qrWrapper.querySelector('.qr-counter');
+
+                const updateQr = () => {
+                    qrDisplayDiv.innerHTML = '';
+                    links.forEach(l => l.classList.remove('qr-highlight'));
+                    
+                    const activeLink = links[currentQrIndex];
+                    activeLink.classList.add('qr-highlight');
+                    
+                    new QRCode(qrDisplayDiv, {
+                        text: activeLink.href,
+                        width: 128,
+                        height: 128,
+                        colorDark : "#000000",
+                        colorLight : "#ffffff",
+                        correctLevel : QRCode.CorrectLevel.H
+                    });
+
+                    if(links.length > 1) {
+                        counterText.innerText = `${currentQrIndex + 1} / ${links.length}`;
+                        prevBtn.disabled = currentQrIndex === 0;
+                        nextBtn.disabled = currentQrIndex === links.length - 1;
+                    }
+                };
+
+                qrBtn.addEventListener('click', () => {
+                    const isHidden = window.getComputedStyle(qrWrapper).display === 'none';
+                    if (isHidden) {
+                        qrWrapper.style.display = 'flex';
+                        updateQr();
+                        chatHistory.scrollTop = chatHistory.scrollHeight;
+                    } else {
+                        qrWrapper.style.display = 'none';
+                        links.forEach(l => l.classList.remove('qr-highlight'));
+                    }
+                });
+
+                if (links.length > 1) {
+                    prevBtn.addEventListener('click', () => {
+                        if (currentQrIndex > 0) {
+                            currentQrIndex--;
+                            updateQr();
+                        }
+                    });
+                    nextBtn.addEventListener('click', () => {
+                        if (currentQrIndex < links.length - 1) {
+                            currentQrIndex++;
+                            updateQr();
+                        }
+                    });
+                }
+            }
+
+            // --- REDIRECT CONFIRMATION LOGIC ---
+            // Detect if the message implies a redirect (by checking known URLs in the text)
+            const triggerUrls = urlContexts.map(c => c.url);
+            
+            let foundTriggerUrl = null;
+            for(const u of triggerUrls) {
+                if(text.includes(u)) {
+                    foundTriggerUrl = u;
+                    break;
+                }
+            }
+
+            if(foundTriggerUrl) {
+                const redirectDiv = document.createElement('div');
+                redirectDiv.className = 'redirect-container';
+                
+                const yesBtn = document.createElement('button');
+                yesBtn.className = 'redirect-btn yes-btn';
+                yesBtn.innerText = "Так";
+                yesBtn.onclick = () => {
+                    window.location.href = foundTriggerUrl;
+                };
+
+                const noBtn = document.createElement('button');
+                noBtn.className = 'redirect-btn no-btn';
+                noBtn.innerText = "Ні";
+                noBtn.onclick = () => {
+                    redirectDiv.style.opacity = '0';
+                    setTimeout(() => redirectDiv.remove(), 300);
+                };
+
+                redirectDiv.appendChild(yesBtn);
+                redirectDiv.appendChild(noBtn);
+                message.appendChild(redirectDiv);
+                setTimeout(() => redirectDiv.style.opacity = '1', 150);
+            }
+
+            chatHistory.scrollTop=chatHistory.scrollHeight; 
+        }
+    },50);
+    chatHistory.scrollTop=chatHistory.scrollHeight;
+}
+
+async function sendMessage(){
+    if(isProcessing)return;
+    const inputText=document.getElementById('inputText').value.trim();
+    if(!inputText)return;
+    
+    const inputField=document.getElementById('inputText'),
+          sendButton=document.querySelector('.send-button');
+    inputField.disabled=true;
+    sendButton.disabled=true;
+    isProcessing=true;
+    inputField.setAttribute('data-placeholder',inputField.placeholder);
+    inputField.placeholder='';
+    
+    addUserMessage(inputText);
+    document.getElementById('inputText').value='';
+    
+    try{
+        await findBestMatch(inputText);
+    }catch(error){
+        console.error(error);
+        addBotMessage("Помилка!");
+    }
+}
+</script>
+</body>
+</html>
